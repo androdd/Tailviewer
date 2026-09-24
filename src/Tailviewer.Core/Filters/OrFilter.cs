@@ -49,8 +49,11 @@ namespace Tailviewer.Core
 		/// <inheritdoc />
 		public bool PassesFilter(IEnumerable<IReadOnlyLogEntry> logEntry)
 		{
-			foreach (var logLine in logEntry)
-				if (PassesFilter(logLine))
+			// Every filter must be evaluated against the log entry as a whole so that its own
+			// quantifier applies (see AndFilter.PassesFilter).
+			// ReSharper disable once ForCanBeConvertedToForeach
+			for (var i = 0; i < _filters.Length; ++i)
+				if (_filters[i].PassesFilter(logEntry))
 					return true;
 
 			return false;

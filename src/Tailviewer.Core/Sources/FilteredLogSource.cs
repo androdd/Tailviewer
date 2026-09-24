@@ -381,6 +381,13 @@ namespace Tailviewer.Core
 		{
 			if (!_fullSourceSection.IsEndOfSection(_currentSourceIndex))
 			{
+				// If we're about to continue processing in the middle of a log entry (which happens
+				// when the source invalidated a region of the log file which starts in the middle of
+				// a multi-line log entry), then we have to start over at the first line of that entry:
+				// The filter can only come to the correct conclusion when it inspects the entire log
+				// entry, and not just the fragment past the invalidated region.
+				TryRewindToStartOfLogEntry();
+
 				int remaining = _fullSourceSection.Index + _fullSourceSection.Count - _currentSourceIndex;
 				int nextCount = Math.Min(remaining, BatchSize);
 				var nextSection = new LogSourceSection(_currentSourceIndex, nextCount);
@@ -524,6 +531,75 @@ namespace Tailviewer.Core
 			Listeners.OnRead(-1);
 		}
 
+		/// <summary>
+		///     Checks if the next line to be processed is a continuation of a log entry whose
+		///     first line(s) we no longer have buffered (because the source invalidated a region
+		///     which starts in the middle of that entry) and if so, rewinds processing to the
+		///     first line of that log entry.
+		/// </summary>
+		private void TryRewindToStartOfLogEntry()
+		{
+			if (_lastLogBuffer.Count > 0)
+				return; //< The buffer holds the current log entry from its first line onward, nothing to do
+
+			if (_currentSourceIndex <= 0)
+				return;
+
+			// If the line we're about to process next doesn't belong to the same log entry
+			// as the line just before it, then we're at the start of a log entry already.
+			var logEntryIndices = new[] {LogEntryIndex.Invalid, LogEntryIndex.Invalid};
+			_source.GetColumn(new LogLineIndex[] {_currentSourceIndex - 1, _currentSourceIndex},
+			                  Core.Columns.LogEntryIndex,
+			                  logEntryIndices);
+			if (logEntryIndices[0].IsInvalid || logEntryIndices[1].IsInvalid)
+				return;
+			if (logEntryIndices[0] != logEntryIndices[1])
+				return;
+
+			var startOfLogEntry = FindStartOfLogEntry(_currentSourceIndex);
+			if (startOfLogEntry >= _currentSourceIndex)
+				return;
+
+			_currentSourceIndex = startOfLogEntry;
+			RemoveFrom(startOfLogEntry);
+		}
+
+		/// <summary>
+		///     Finds the index of the first line of the log entry to which the line just before
+		///     the given index belongs.
+		/// </summary>
+		private int FindStartOfLogEntry(int index)
+		{
+			const int lookbackBatchSize = 1000;
+			var buffer = new LogEntryIndex[Math.Min(index, lookbackBatchSize)];
+			var logEntryIndex = LogEntryIndex.Invalid;
+			var start = index;
+			while (start > 0)
+			{
+				var count = Math.Min(start, buffer.Length);
+				var section = new LogSourceSection(start - count, count);
+				for (var i = 0; i < count; ++i)
+					buffer[i] = LogEntryIndex.Invalid;
+				_source.GetColumn(section, Core.Columns.LogEntryIndex, buffer);
+
+				for (var i = count - 1; i >= 0; --i)
+				{
+					var current = buffer[i];
+					if (current.IsInvalid)
+						return start; //< We cannot make sense of the source's data: don't rewind any further
+
+					if (logEntryIndex.IsInvalid)
+						logEntryIndex = current;
+					else if (current != logEntryIndex)
+						return start;
+
+					start = (int) (section.Index + i);
+				}
+			}
+
+			return start;
+		}
+
 		private void TryAddLogLine(IReadOnlyLogEntry logEntry)
 		{
 			// We have a filter that operates on individual lines (regardless of log entry affiliation).
@@ -537,29 +613,63 @@ namespace Tailviewer.Core
 
 		private bool TryAddLogEntry(IReadOnlyList<IReadOnlyLogEntry> logEntry)
 		{
-			if (_indices.Count > 0 && logEntry.Count > 0 &&
-			    _indices[_indices.Count - 1] == logEntry[logEntry.Count - 1].Index)
-				return true;
+			if (logEntry.Count == 0)
+				return false;
+
+			var firstLineIndex = (int) logEntry[0].Index;
+			var lastLineIndex = (int) logEntry[logEntry.Count - 1].Index;
+			int lastAddedIndex;
+			lock (_indices)
+			{
+				lastAddedIndex = _indices.Count > 0 ? _indices[_indices.Count - 1] : -1;
+			}
+
+			if (lastAddedIndex >= lastLineIndex)
+				return true; //< We've added this entire log entry before already
 
 			if (_logEntryFilter.PassesFilter(logEntry))
 			{
+				int count;
 				lock (_indices)
 				{
-					if (logEntry.Count > 0)
+					int logEntryIndex;
+					if (lastAddedIndex >= firstLineIndex)
 					{
-						foreach (var line in logEntry)
-						{
-							_indices.Add((int) line.Index);
-							_logEntryIndices[(int) line.Index] = _currentLogEntryIndex;
-							_maxCharactersPerLine = Math.Max(_maxCharactersPerLine, line.RawContent?.Length ?? 0);
-						}
+						// We've added the first line(s) of this log entry once before, back when
+						// it was the last entry of the source and not yet complete. Now that it
+						// has grown, we may only add those lines which we haven't added yet and
+						// they must be attributed to the same log entry as the lines before them,
+						// or otherwise we would be displaying duplicate lines.
+						logEntryIndex = _logEntryIndices[lastAddedIndex];
+					}
+					else
+					{
+						logEntryIndex = _currentLogEntryIndex;
 						++_currentLogEntryIndex;
 					}
+
+					foreach (var line in logEntry)
+					{
+						var lineIndex = (int) line.Index;
+						if (lineIndex <= lastAddedIndex)
+							continue;
+
+						_indices.Add(lineIndex);
+						_logEntryIndices[lineIndex] = logEntryIndex;
+						_maxCharactersPerLine = Math.Max(_maxCharactersPerLine, line.RawContent?.Length ?? 0);
+					}
+
+					count = _indices.Count;
 				}
-				Listeners.OnRead(_indices.Count);
+				Listeners.OnRead(count);
 				return true;
 			}
-			
+
+			// The filter rejects this log entry. If we've added its first line(s) once before
+			// (back when the entry was not yet complete), then we have to retract them again.
+			if (lastAddedIndex >= firstLineIndex)
+				RemoveFrom(firstLineIndex);
+
 			return false;
 		}
 	}

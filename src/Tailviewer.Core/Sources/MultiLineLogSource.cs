@@ -336,12 +336,20 @@ namespace Tailviewer.Core
 				if (toRemove > 0)
 				{
 					_indices.RemoveRange((int)firstRemovedIndex, toRemove);
-					_currentLogEntry = new LogEntryInfo(firstRemovedIndex - 1, 0);
 				}
 				if (previousSourceIndex != _currentSourceIndex)
 				{
 					_indices.RemoveRange((int) _currentSourceIndex, _indices.Count - _currentSourceIndex);
 				}
+
+				// If the next appended line turns out to be a continuation of the log entry
+				// which the removed region cut into, then it must be appended to that very
+				// log entry once more: we restore the current log entry from the last line
+				// which remains in the index, or otherwise the entry would be split in two
+				// at the point of invalidation and filters would only ever see fragments of it.
+				_currentLogEntry = _indices.Count > 0
+					? _indices[_indices.Count - 1]
+					: new LogEntryInfo(-1, 0);
 			}
 
 			if (_indices.Count != _currentSourceIndex)

@@ -323,6 +323,69 @@ namespace Tailviewer.Core.Tests.Sources.Filtered
 		}
 
 		[Test]
+		[Description("Verifies that when an invalidation cuts a multi-line log entry in two, the lines following the invalidated region are not filtered as a separate fragment")]
+		public void TestInvalidate5()
+		{
+			var logFile = new InMemoryLogSource();
+
+			using (var multiLine = new MultiLineLogSource(_taskScheduler, logFile, TimeSpan.Zero))
+			using (var filtered = new FilteredLogSource(_taskScheduler, TimeSpan.Zero, multiLine, null,
+			                                            Filter.Create("INFO", true, LevelFlags.All)))
+			{
+				logFile.AddEntry("INFO: A", LevelFlags.Info);
+				logFile.AddEntry("INFO: B", LevelFlags.Info);
+				logFile.AddEntry("b2", LevelFlags.Other);
+				logFile.AddEntry("b3", LevelFlags.Other);
+				logFile.AddEntry("INFO: C", LevelFlags.Info);
+				_taskScheduler.RunOnce();
+
+				filtered.GetProperty(Core.Properties.LogEntryCount).Should().Be(5);
+
+				logFile.RemoveFrom(3);
+				logFile.AddEntry("b3", LevelFlags.Other);
+				logFile.AddEntry("INFO: C", LevelFlags.Info);
+				_taskScheduler.RunOnce();
+
+				filtered.GetProperty(Core.Properties.LogEntryCount).Should().Be(5,
+					"because the re-appended continuation line belongs to a log entry which matches the filter");
+				filtered.GetEntry(0).OriginalIndex.Should().Be(0);
+				filtered.GetEntry(1).OriginalIndex.Should().Be(1);
+				filtered.GetEntry(2).OriginalIndex.Should().Be(2);
+				filtered.GetEntry(3).OriginalIndex.Should().Be(3, "because 'b3' is a continuation of the second log entry whose first line matches the filter");
+				filtered.GetEntry(4).OriginalIndex.Should().Be(4);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that an inverted quick filter, combined with another filter, hides an entire multi-line log entry when any of its lines match")]
+		public void TestFilterMultilineInverted()
+		{
+			var logFile = new InMemoryLogSource();
+
+			var filter = new AndFilter(new ILogEntryFilter[]
+			{
+				new InvertFilter(new SubstringFilter("Sync", true)),
+				new SubstringFilter("2026", true)
+			});
+
+			using (var multiLine = new MultiLineLogSource(_taskScheduler, logFile, TimeSpan.Zero))
+			using (var filtered = new FilteredLogSource(_taskScheduler, TimeSpan.Zero, multiLine, null, filter))
+			{
+				logFile.AddEntry("2026-09-04 INFO: Starting up", LevelFlags.Info);
+				logFile.AddEntry("2026-09-04 ERROR: SyncUserSessionManager - Error mapping local session", LevelFlags.Error);
+				logFile.AddEntry("   at Method.invoke(Method.java:569)", LevelFlags.Other);
+				logFile.AddEntry("2026-09-04 DEBUG: SyncUserSessionManager - Finish sending local sessions", LevelFlags.Debug);
+				logFile.AddEntry("2026-09-04 INFO: Done", LevelFlags.Info);
+				_taskScheduler.RunOnce();
+
+				filtered.GetProperty(Core.Properties.LogEntryCount).Should().Be(2,
+					"because both log entries mentioning Sync must be hidden entirely, stack trace lines included");
+				filtered.GetEntry(0).OriginalIndex.Should().Be(0);
+				filtered.GetEntry(1).OriginalIndex.Should().Be(4);
+			}
+		}
+
+		[Test]
 		[Description(
 			"Verifies that listeners are notified eventually, even when the # of filtered entries is less than the minimum batch size"
 			)]

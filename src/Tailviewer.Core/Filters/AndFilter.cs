@@ -29,26 +29,17 @@ namespace Tailviewer.Core
 		/// <inheritdoc />
 		public bool PassesFilter(IEnumerable<IReadOnlyLogEntry> logEntry)
 		{
-			var passes = new bool[_filters.Length];
-			foreach (IReadOnlyLogEntry logLine in logEntry)
-			{
-				for (int i = 0; i < _filters.Length; ++i)
-				{
-					ILogEntryFilter filter = _filters[i];
-					if (!passes[i])
-					{
-						passes[i] = filter.PassesFilter(logLine);
-					}
-				}
-			}
-
+			// Every filter must be evaluated against the log entry as a whole so that its own
+			// quantifier applies: an inverted filter, for example, only passes an entry if NO
+			// line matches. Testing line by line would allow any non-matching line to pass the
+			// entire entry through such a filter.
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
-			for (int i = 0; i < passes.Length; ++i)
+			for (int i = 0; i < _filters.Length; ++i)
 // ReSharper restore ForCanBeConvertedToForeach
 // ReSharper restore LoopCanBeConvertedToQuery
 			{
-				if (!passes[i])
+				if (!_filters[i].PassesFilter(logEntry))
 					return false;
 			}
 

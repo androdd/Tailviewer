@@ -95,6 +95,20 @@ namespace Tailviewer.Core.Tests.Filters
 		}
 
 		[Test]
+		[Description("Verifies that an inverted filter is applied to the log entry as a whole: a multi-line entry which contains the filter string on ANY line must not pass")]
+		public void TestMultiLine3()
+		{
+			var filter = new OrFilter(new ILogEntryFilter[] {new InvertFilter(new SubstringFilter("foo", true))});
+			var lines = new[]
+			{
+				new LogEntry(Core.Columns.RawContent){RawContent = "bar"},
+				new LogEntry(Core.Columns.RawContent){RawContent = "foo"}
+			};
+
+			filter.PassesFilter(lines).Should().BeFalse("because the entry contains the inverted filter's string on one of its lines");
+		}
+
+		[Test]
 		public void TestToString()
 		{
 			var filter = new OrFilter(new[] { new SubstringFilter("foo", true) });

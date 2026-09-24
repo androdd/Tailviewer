@@ -674,6 +674,36 @@ namespace Tailviewer.Core.Tests.Sources.MultiLine
 		}
 
 		[Test]
+		[Description("Verifies that a continuation line which is re-appended after an invalidation is joined with the very log entry it belongs to")]
+		public void TestManyEntries8()
+		{
+			var source = new InMemoryLogSource();
+			var logFile = new MultiLineLogSource(_taskScheduler, source, TimeSpan.Zero);
+
+			source.AddEntry("DEBUG: A", LevelFlags.Debug);
+			source.AddEntry("a2", LevelFlags.Other);
+			source.AddEntry("INFO: B", LevelFlags.Info);
+			source.AddEntry("b2", LevelFlags.Other);
+			_taskScheduler.RunOnce();
+
+			var entries = logFile.GetEntries(new LogSourceSection(0, 4));
+			entries[3].LogEntryIndex.Should().Be(1, "because the 4th line is a continuation of the 2nd log entry");
+			entries[3].LogLevel.Should().Be(LevelFlags.Info, "because a continuation line reports the level of its entry's first line");
+
+			source.RemoveFrom(3);
+			_taskScheduler.RunOnce();
+
+			source.AddEntry("b2", LevelFlags.Other);
+			_taskScheduler.RunOnce();
+
+			entries = logFile.GetEntries(new LogSourceSection(0, 4));
+			entries[2].LogEntryIndex.Should().Be(1);
+			entries[2].LogLevel.Should().Be(LevelFlags.Info);
+			entries[3].LogEntryIndex.Should().Be(1, "because the re-appended continuation line still belongs to the 2nd log entry");
+			entries[3].LogLevel.Should().Be(LevelFlags.Info, "because a continuation line reports the level of its entry's first line");
+		}
+
+		[Test]
 		[Issue("https://github.com/Kittyfisto/Tailviewer/issues/74")]
 		public void TestManyEntries7()
 		{
