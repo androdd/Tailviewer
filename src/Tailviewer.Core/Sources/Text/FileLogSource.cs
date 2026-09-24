@@ -45,6 +45,17 @@ namespace Tailviewer.Core
 		private const int MaximumLineCount = 10000;
 		private bool _isDisposed;
 
+		/// <summary>
+		///     The encoding the user forced upon this file via <see cref="TextProperties.OverwrittenEncoding"/>, if any.
+		/// </summary>
+		/// <remarks>
+		///     Kept in a dedicated field (rather than only in <see cref="_properties"/>) because it is written from
+		///     the UI thread while <see cref="_propertiesBuffer"/> is owned by the task thread which regularly
+		///     copies the buffer over <see cref="_properties"/>: The field is the single source of truth from
+		///     which the buffer is refreshed so a user's choice cannot be lost in that copy.
+		/// </remarks>
+		private volatile Encoding _overwrittenEncoding;
+
 		#region Processing
 
 		private readonly ConcurrentQueue<KeyValuePair<ILogSource, LogSourceModification>> _pendingSections;
@@ -85,6 +96,9 @@ namespace Tailviewer.Core
 
 			_propertiesBuffer = new PropertiesBufferList();
 			_propertiesBuffer.SetValue(Core.Properties.Name, _fullFilename);
+			// We expose this (writable) property from the start so that the user is offered to overwrite
+			// the encoding even before / regardless of whether we've been able to read the file.
+			_propertiesBuffer.SetValue(TextProperties.OverwrittenEncoding, null);
 
 			_properties = new ConcurrentPropertiesList();
 
@@ -115,11 +129,17 @@ namespace Tailviewer.Core
 
 		public override void SetProperty(IPropertyDescriptor property, object value)
 		{
+			if (Equals(property, TextProperties.OverwrittenEncoding))
+				_overwrittenEncoding = value as Encoding;
+
 			_properties.SetValue(property, value);
 		}
 
 		public override void SetProperty<T>(IPropertyDescriptor<T> property, T value)
 		{
+			if (Equals(property, TextProperties.OverwrittenEncoding))
+				_overwrittenEncoding = value as Encoding;
+
 			_properties.SetValue(property, value);
 		}
 
@@ -221,7 +241,7 @@ namespace Tailviewer.Core
 							else
 							{
 								var autoDetectedEncoding = _encodingDetector.TryFindEncoding(stream);
-								var defaultEncoding = _services.TryRetrieve<Encoding>() ?? Encoding.Default;
+								var defaultEncoding = GetDefaultEncoding();
 								var format = _formatDetector.TryDetermineFormat(_fullFilename, stream, overwrittenEncoding ?? autoDetectedEncoding ?? defaultEncoding);
 								var encoding = PickEncoding(overwrittenEncoding, format, autoDetectedEncoding, defaultEncoding);
 								var formatChanged = _propertiesBuffer.SetValue(Core.Properties.Format, format);
@@ -306,7 +326,8 @@ namespace Tailviewer.Core
 
 		private bool DetectFileChange(out Encoding overwrittenEncoding)
 		{
-			overwrittenEncoding = null;
+			// The user's choice must be honored no matter why we're (re-)reading the file
+			overwrittenEncoding = _overwrittenEncoding;
 			if (!_filesystem.FileExists(_fullFilename))
 			{
 				if (_lastFingerprint != null)
@@ -341,15 +362,39 @@ namespace Tailviewer.Core
 				return true;
 			}
 
-			overwrittenEncoding = _properties.GetValue(TextProperties.OverwrittenEncoding);
 			var currentEncoding = _properties.GetValue(TextProperties.Encoding);
-			if (!Equals(overwrittenEncoding, null) && !Equals(overwrittenEncoding, currentEncoding))
+			if (currentEncoding == null)
+				return false; //< We haven't been able to read the file so far, there's nothing to re-read with a different encoding
+
+			// The file itself hasn't changed, but the encoding we're supposed to read it with may have:
+			// Either because the user overwrote the encoding of this file (or reverted that overwrite) or because
+			// the user changed the default encoding which we use for files which don't tell us their encoding.
+			var expectedEncoding = ChooseEncoding(overwrittenEncoding,
+			                                      _properties.GetValue(Core.Properties.Format),
+			                                      _properties.GetValue(TextProperties.AutoDetectedEncoding),
+			                                      GetDefaultEncoding());
+			if (!Equals(expectedEncoding, currentEncoding))
 			{
-				Log.DebugFormat("File {0} user chose an overwritten encoding {1} which differs from the current encoding {2}", _fullFilename, overwrittenEncoding, overwrittenEncoding);
+				Log.DebugFormat("File {0} should be read with encoding {1} which differs from the current encoding {2}", _fullFilename, expectedEncoding, currentEncoding);
 				return true;
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		///     Returns the encoding which shall be used for text files which don't tell us their encoding
+		///     (no byte order mark, no format-specific encoding and not overwritten by the user).
+		/// </summary>
+		/// <remarks>
+		///     The user may configure this encoding via <see cref="ILogFileSettings.DefaultEncoding"/>.
+		///     It's evaluated every time we look at the file so that changes to the setting take effect immediately.
+		/// </remarks>
+		private Encoding GetDefaultEncoding()
+		{
+			return _services.TryRetrieve<ILogFileSettings>()?.DefaultEncoding ??
+			       _services.TryRetrieve<Encoding>() ??
+			       Encoding.Default;
 		}
 
 		[Pure]
@@ -363,11 +408,8 @@ namespace Tailviewer.Core
 					                _fullFilename,
 					                formatEncoding.WebName,
 					                overwrittenEncoding.WebName);
-
-				return overwrittenEncoding;
 			}
-
-			if (formatEncoding != null)
+			else if (formatEncoding != null)
 			{
 				if (detectedEncoding != null)
 					Log.WarnFormat("File {0} has been detected to be encoded with {1}, but its format ({2}) says it's encoded with {3}, choosing the latter....",
@@ -375,22 +417,35 @@ namespace Tailviewer.Core
 					               detectedEncoding.WebName,
 					               format,
 					               formatEncoding.WebName);
-
-				return formatEncoding;
 			}
-
-			if (detectedEncoding != null)
+			else if (detectedEncoding != null)
 			{
 				Log.DebugFormat("File {0}: Encoding was auto detected to be {1}", _fullFilename, detectedEncoding);
-				return detectedEncoding;
+			}
+			else
+			{
+				Log.DebugFormat("File {0}: No encoding could be determined, falling back to {1}", _fullFilename, defaultEncoding);
 			}
 
-			Log.DebugFormat("File {0}: No encoding could be determined, falling back to {1}", _fullFilename, defaultEncoding);
-			return defaultEncoding;
+			return ChooseEncoding(overwrittenEncoding, format, detectedEncoding, defaultEncoding);
+		}
+
+		/// <summary>
+		///     Decides which encoding to use for a file, in order of precedence:
+		///     the user's explicit choice, the format's encoding, the byte order mark and finally the default.
+		/// </summary>
+		[Pure]
+		private static Encoding ChooseEncoding(Encoding overwrittenEncoding, ILogFileFormat format, Encoding detectedEncoding, Encoding defaultEncoding)
+		{
+			return overwrittenEncoding ?? format?.Encoding ?? detectedEncoding ?? defaultEncoding;
 		}
 
 		private void UpdateProperties()
 		{
+			// The buffer is about to be copied over our properties, so it must carry the user's choice
+			// (or otherwise we'd be resetting it right after the user made it).
+			_propertiesBuffer.SetValue(TextProperties.OverwrittenEncoding, _overwrittenEncoding);
+
 			if (_finalLogSource != null)
 			{
 				_finalLogSource.GetAllProperties(_propertiesBuffer.Except(TextProperties.AutoDetectedEncoding, Core.Properties.Format)); //< We don't want the log source to overwrite the encoding we just found out...

@@ -103,14 +103,20 @@ namespace Tailviewer.Core
 			return value;
 		}
 
+		/// <inheritdoc />
 		public override void SetProperty(IPropertyDescriptor property, object value)
 		{
+			// The source owns the property, but we mirror the change locally so it's visible
+			// to our clients immediately and not only after our next update.
 			_source.SetProperty(property, value);
+			_properties.SetValue(property, value);
 		}
 
+		/// <inheritdoc />
 		public override void SetProperty<T>(IPropertyDescriptor<T> property, T value)
 		{
 			_source.SetProperty(property, value);
+			_properties.SetValue(property, value);
 		}
 
 		/// <inheritdoc />

@@ -261,13 +261,19 @@ namespace Tailviewer.Core
 			return value;
 		}
 
+		/// <inheritdoc />
 		public void SetProperty(IPropertyDescriptor property, object value)
 		{
+			// The inner source owns the property (and will report the new value back to us via GetAllProperties),
+			// but we set it locally as well so the change is visible immediately and not only after the next update.
+			_source?.SetProperty(property, value);
 			_properties.SetValue(property, value);
 		}
 
+		/// <inheritdoc />
 		public void SetProperty<T>(IPropertyDescriptor<T> property, T value)
 		{
+			_source?.SetProperty(property, value);
 			_properties.SetValue(property, value);
 		}
 

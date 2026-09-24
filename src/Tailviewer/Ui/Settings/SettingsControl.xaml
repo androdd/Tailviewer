@@ -366,9 +366,9 @@
                                    Grid.Row="4"
                                    Foreground="#6B6B6B"
                                    TextWrapping="Wrap">
-                            <Run Text="If anything else but 'Auto detect' is selected, then tailviewer will only use the given encoding to decode text-based log files." />
+                            <Run Text="Text-based log files which don't declare their encoding (no byte order mark) are decoded with this encoding." />
                             <LineBreak />
-                            <Run Text="Changing this value requires tailviewer to be restarted in order to take effect." />
+                            <Run Text="'Auto detect' uses the system's default code page. The encoding of an individual file can be overwritten in its properties side panel." />
                         </TextBlock>
 
                     </Grid>

@@ -67,6 +67,20 @@ namespace Tailviewer.Core.Tests.Sources.MultiLine
 		}
 
 		[Test]
+		[Description("Verifies that setting a property forwards the change to the source and makes it visible immediately")]
+		public void TestSetPropertyForwardsToSource()
+		{
+			using (var logFile = new MultiLineLogSource(_taskScheduler, _source.Object, TimeSpan.Zero))
+			{
+				var encoding = System.Text.Encoding.GetEncoding(1251);
+				logFile.SetProperty(TextProperties.OverwrittenEncoding, encoding);
+
+				_source.Verify(x => x.SetProperty(TextProperties.OverwrittenEncoding, encoding), Times.Once);
+				logFile.GetProperty(TextProperties.OverwrittenEncoding).Should().Be(encoding, "because the change should be visible immediately");
+			}
+		}
+
+		[Test]
 		[Description("Verifies that MaxCharactersPerLine is changed once a modification is applied")]
 		public void TestOneModification2()
 		{

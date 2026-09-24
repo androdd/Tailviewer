@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using FluentAssertions;
@@ -207,6 +208,175 @@ namespace Tailviewer.Acceptance.Tests.BusinessLogic.Sources.Text
 				entries = logSource.GetEntries();
 				entries.Should().HaveCount(1);
 				entries[0].RawContent.Should().Be("42° North");
+			}
+		}
+
+		private static readonly Encoding Cyrillic = Encoding.GetEncoding(1251);
+		private static readonly Encoding Latin1 = Encoding.GetEncoding(1252);
+		private const string CyrillicText = "Привет, мир";
+
+		private string CreateFileWith(Encoding encoding, string content, bool byteOrderMark = false)
+		{
+			var fileName = GetUniqueNonExistingFileName();
+			var preamble = byteOrderMark ? encoding.GetPreamble() : new byte[0];
+			File.WriteAllBytes(fileName, preamble.Concat(encoding.GetBytes(content)).ToArray());
+			return fileName;
+		}
+
+		private Mock<ILogFileSettings> RegisterSettings(Encoding defaultEncoding)
+		{
+			var settings = new Mock<ILogFileSettings>();
+			settings.Setup(x => x.DefaultEncoding).Returns(defaultEncoding);
+			_services.RegisterInstance<ILogFileSettings>(settings.Object);
+			return settings;
+		}
+
+		private static string WaitForFirstLine(ILogSource logSource, Encoding expectedEncoding)
+		{
+			logSource.Property(x => x.GetProperty(TextProperties.Encoding)).ShouldEventually().Be(expectedEncoding);
+			logSource.Property(x => x.GetProperty(Properties.PercentageProcessed)).ShouldEventually().Be(Percentage.HundredPercent);
+			logSource.Property(x => x.GetEntry(0).RawContent).ShouldEventually().NotBeNull();
+			return logSource.GetEntry(0).RawContent;
+		}
+
+		[Test]
+		[Description("Verifies that the default encoding configured by the user is used to decode files which don't declare their encoding")]
+		public void TestEncoding_DefaultFromSettings()
+		{
+			RegisterSettings(Cyrillic);
+
+			var fileName = CreateFileWith(Cyrillic, CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Cyrillic).Should().Be(CyrillicText);
+				logSource.GetProperty(TextProperties.AutoDetectedEncoding).Should().BeNull("because there's no BOM");
+				logSource.GetProperty(TextProperties.OverwrittenEncoding).Should().BeNull("because we didn't overwrite the encoding");
+			}
+		}
+
+		[Test]
+		[Description("Verifies that changing the default encoding causes the file to be re-read with the new encoding, without having to re-open it")]
+		public void TestEncoding_DefaultChanged()
+		{
+			var settings = RegisterSettings(Latin1);
+
+			var fileName = CreateFileWith(Cyrillic, CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Latin1).Should().NotBe(CyrillicText, "because the file was decoded with the wrong encoding");
+
+				settings.Setup(x => x.DefaultEncoding).Returns(Cyrillic);
+				WaitForFirstLine(logSource, Cyrillic).Should().Be(CyrillicText);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that a UTF-8 file without BOM (the most common case for non-latin text) is decoded correctly when UTF-8 is the default encoding")]
+		public void TestEncoding_DefaultUtf8WithoutByteOrderMark()
+		{
+			RegisterSettings(Encoding.UTF8);
+
+			var fileName = CreateFileWith(Encoding.UTF8, CyrillicText + "\r\n" + CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Encoding.UTF8).Should().Be(CyrillicText);
+				logSource.GetProperty(TextProperties.AutoDetectedEncoding).Should().BeNull("because there's no BOM");
+				logSource.GetEntries().Select(x => x.RawContent).Should().Equal(CyrillicText, CyrillicText);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that a UTF-8 file without BOM can be decoded by overwriting the encoding with UTF-8")]
+		public void TestEncoding_OverwriteUtf8WithoutByteOrderMark()
+		{
+			RegisterSettings(Latin1);
+
+			var fileName = CreateFileWith(Encoding.UTF8, CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Latin1).Should().NotBe(CyrillicText);
+
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, Encoding.UTF8);
+				WaitForFirstLine(logSource, Encoding.UTF8).Should().Be(CyrillicText);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that a byte order mark takes precedence over the configured default encoding")]
+		public void TestEncoding_DefaultDoesNotOverruleByteOrderMark()
+		{
+			RegisterSettings(Cyrillic);
+
+			var fileName = CreateFileWith(Encoding.UTF8, CyrillicText, byteOrderMark: true);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Encoding.UTF8).Should().Be(CyrillicText);
+				logSource.GetProperty(TextProperties.AutoDetectedEncoding).Should().Be(Encoding.UTF8);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that the user can overwrite the encoding of a particular file and revert that decision again")]
+		public void TestEncoding_OverwriteAndRevert()
+		{
+			RegisterSettings(Latin1);
+
+			var fileName = CreateFileWith(Cyrillic, CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Latin1).Should().NotBe(CyrillicText);
+				logSource.Properties.Should().Contain(TextProperties.OverwrittenEncoding, "because the user must be offered to overwrite the encoding");
+
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, Cyrillic);
+				logSource.GetProperty(TextProperties.OverwrittenEncoding).Should().Be(Cyrillic, "because the change should be visible immediately");
+				WaitForFirstLine(logSource, Cyrillic).Should().Be(CyrillicText);
+				logSource.GetProperty(TextProperties.OverwrittenEncoding).Should().Be(Cyrillic, "because the source must not forget the user's choice");
+
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, null);
+				WaitForFirstLine(logSource, Latin1).Should().NotBe(CyrillicText, "because the file should be decoded with the default encoding once more");
+				logSource.GetProperty(TextProperties.OverwrittenEncoding).Should().BeNull();
+			}
+		}
+
+		[Test]
+		[Description("Verifies that the overwritten encoding beats a byte order mark and that reverting it restores the auto detected encoding")]
+		public void TestEncoding_OverwriteByteOrderMark()
+		{
+			var fileName = CreateFileWith(Encoding.UTF8, CyrillicText, byteOrderMark: true);
+			using (var logSource = Create(fileName))
+			{
+				WaitForFirstLine(logSource, Encoding.UTF8).Should().Be(CyrillicText);
+
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, Cyrillic);
+				WaitForFirstLine(logSource, Cyrillic).Should().NotBe(CyrillicText);
+
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, null);
+				WaitForFirstLine(logSource, Encoding.UTF8).Should().Be(CyrillicText);
+			}
+		}
+
+		[Test]
+		[Description("Verifies that the overwritten encoding survives the file being modified")]
+		public void TestEncoding_OverwriteSurvivesFileChange()
+		{
+			RegisterSettings(Latin1);
+
+			var fileName = CreateFileWith(Cyrillic, CyrillicText);
+			using (var logSource = Create(fileName))
+			{
+				logSource.SetProperty(TextProperties.OverwrittenEncoding, Cyrillic);
+				WaitForFirstLine(logSource, Cyrillic).Should().Be(CyrillicText);
+
+				using (var stream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+				{
+					var bytes = Cyrillic.GetBytes("\r\n" + CyrillicText);
+					stream.Write(bytes, 0, bytes.Length);
+				}
+
+				logSource.Property(x => x.GetProperty(Properties.LogEntryCount)).ShouldEventually().Be(2);
+				logSource.Property(x => x.GetProperty(Properties.PercentageProcessed)).ShouldEventually().Be(Percentage.HundredPercent);
+				logSource.GetProperty(TextProperties.Encoding).Should().Be(Cyrillic);
+				logSource.GetEntries().Select(x => x.RawContent).Should().Equal(CyrillicText, CyrillicText);
 			}
 		}
 

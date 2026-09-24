@@ -238,6 +238,32 @@ namespace Tailviewer.Core.Tests.Sources.Proxy
 		}
 
 		[Test]
+		[Description("Verifies that setting a property forwards the change to the inner log source (which owns the property)")]
+		public void TestSetPropertyForwardsToInnerSource()
+		{
+			using (var proxy = new LogSourceProxy(_taskScheduler, TimeSpan.Zero, _logFile.Object))
+			{
+				var encoding = System.Text.Encoding.GetEncoding(1251);
+				proxy.SetProperty(TextProperties.OverwrittenEncoding, encoding);
+
+				_logFile.Verify(x => x.SetProperty(TextProperties.OverwrittenEncoding, encoding), Times.Once);
+				proxy.GetProperty(TextProperties.OverwrittenEncoding).Should().Be(encoding, "because the change should be visible immediately");
+			}
+		}
+
+		[Test]
+		[Description("Verifies that setting a property on an empty proxy doesn't throw")]
+		public void TestSetPropertyWithoutInnerSource()
+		{
+			using (var proxy = new LogSourceProxy(_taskScheduler, TimeSpan.Zero))
+			{
+				var encoding = System.Text.Encoding.UTF8;
+				new Action(() => proxy.SetProperty(TextProperties.OverwrittenEncoding, encoding)).Should().NotThrow();
+				proxy.GetProperty(TextProperties.OverwrittenEncoding).Should().Be(encoding);
+			}
+		}
+
+		[Test]
 		public void TestDispose1()
 		{
 			var proxy = new LogSourceProxy(_taskScheduler, TimeSpan.Zero);

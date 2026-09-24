@@ -25,18 +25,51 @@ namespace Tailviewer.Ui.Settings
 
 		static SettingsFlyoutViewModel()
 		{
-			Encodings = new[]
+			var encodings = new List<EncodingViewModel>
 			{
 				// TODO: Move to service
 				new EncodingViewModel(null, "Auto detect"),
-				new EncodingViewModel(Encoding.Default),
-				new EncodingViewModel(Encoding.ASCII),
-				new EncodingViewModel(Encoding.UTF8),
-				new EncodingViewModel(Encoding.UTF7),
-				new EncodingViewModel(Encoding.UTF32),
-				new EncodingViewModel(Encoding.BigEndianUnicode),
-				new EncodingViewModel(Encoding.Unicode)
+				new EncodingViewModel(Encoding.Default, $"System default ({Encoding.Default.WebName})"),
+				new EncodingViewModel(Encoding.UTF8, "Unicode (UTF-8)"),
+				new EncodingViewModel(Encoding.Unicode, "Unicode (UTF-16 little endian)"),
+				new EncodingViewModel(Encoding.BigEndianUnicode, "Unicode (UTF-16 big endian)"),
+				new EncodingViewModel(Encoding.UTF32, "Unicode (UTF-32)"),
+				new EncodingViewModel(Encoding.UTF7, "Unicode (UTF-7)"),
+				new EncodingViewModel(Encoding.ASCII, "ASCII (7 bit)")
 			};
+
+			// Legacy single-byte code pages which are still in widespread use, most prominently by
+			// applications which write text files using the system's default code page of a non-latin locale.
+			TryAdd(encodings, codePage: 1251, name: "Cyrillic (windows-1251)");
+			TryAdd(encodings, codePage: 20866, name: "Cyrillic (KOI8-R)");
+			TryAdd(encodings, codePage: 21866, name: "Cyrillic (KOI8-U)");
+			TryAdd(encodings, codePage: 28595, name: "Cyrillic (ISO 8859-5)");
+			TryAdd(encodings, codePage: 866, name: "Cyrillic (DOS, cp866)");
+			TryAdd(encodings, codePage: 1250, name: "Central European (windows-1250)");
+			TryAdd(encodings, codePage: 1252, name: "Western European (windows-1252)");
+			TryAdd(encodings, codePage: 1253, name: "Greek (windows-1253)");
+			TryAdd(encodings, codePage: 1254, name: "Turkish (windows-1254)");
+			TryAdd(encodings, codePage: 28591, name: "Western European (ISO 8859-1)");
+
+			Encodings = encodings;
+		}
+
+		private static void TryAdd(ICollection<EncodingViewModel> encodings, int codePage, string name)
+		{
+			try
+			{
+				var encoding = Encoding.GetEncoding(codePage);
+				// The system default may very well be one of these code pages: We don't want to offer the same
+				// encoding twice, so we skip those which are already part of the list.
+				if (encodings.Any(x => Equals(x.Encoding, encoding)))
+					return;
+
+				encodings.Add(new EncodingViewModel(encoding, name));
+			}
+			catch (Exception e)
+			{
+				Log.WarnFormat("Unable to offer encoding with code page {0} ({1}): {2}", codePage, name, e.Message);
+			}
 		}
 
 		private readonly IApplicationSettings _settings;

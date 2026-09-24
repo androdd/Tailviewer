@@ -68,20 +68,42 @@ namespace Tailviewer.Ui.SidePanel.Property
 			_logSource?.GetAllProperties(_propertyValues);
 			foreach (var property in _propertyValues.Properties)
 			{
-				if (!_presentersByProperty.TryGetValue(property, out var presenter
-				                                      ))
+				if (!_presentersByProperty.TryGetValue(property, out var presenter))
 				{
 					presenter = TryCreateViewModel(property);
-					_presentersByProperty.Add(property, presenter
-					                         );
+					_presentersByProperty.Add(property, presenter);
 
 					if (presenter != null)
+					{
+						// Presenters of writable properties allow the user to change the property's value:
+						// Those changes must find their way back into the log source.
+						if (property is IPropertyDescriptor writableProperty)
+							presenter.OnValueChanged += value => OnPropertyValueChanged(writableProperty, value);
+
 						_presenters.Add(presenter);
+					}
 				}
 
 				// Some properties just don't have presenters and we want to avoid trying to create one over and over,
 				// so we simply remember those that don't have one
 				presenter?.Update(_propertyValues.GetValue(property));
+			}
+		}
+
+		private void OnPropertyValueChanged(IPropertyDescriptor property, object value)
+		{
+			var logSource = _logSource;
+			if (logSource == null)
+				return;
+
+			try
+			{
+				Log.DebugFormat("Setting property {0} to {1}", property, value);
+				logSource.SetProperty(property, value);
+			}
+			catch (Exception e)
+			{
+				Log.ErrorFormat("Caught unexpected exception while setting property {0} to {1}: {2}", property, value, e);
 			}
 		}
 
