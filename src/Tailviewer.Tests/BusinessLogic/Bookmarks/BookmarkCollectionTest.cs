@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
@@ -149,7 +150,55 @@ namespace Tailviewer.Tests.BusinessLogic.Bookmarks
 
 			collection.RemoveBookmark(bookmark);
 			_bookmarks.Verify(x => x.SaveAsync(), Times.Exactly(2));
+			_bookmarks.Verify(x => x.Remove(It.Is<IEnumerable<BookmarkSettings>>(y => y.Count() == 1)), Times.Once,
+			                  "because the bookmark must be removed from the settings as well or it will reappear after a restart");
 			collection.Bookmarks.Should().BeEmpty();
+		}
+
+		[Test]
+		[Description("Verifies that a removed bookmark doesn't reappear after a restart")]
+		public void TestRemoveBookmarkFromSettings()
+		{
+			var fileName = PathEx.GetTempFileName();
+			var bookmarks = new Tailviewer.Settings.Bookmarks.Bookmarks(fileName);
+			var collection = new BookmarkCollection(bookmarks, TimeSpan.Zero);
+			collection.AddDataSource(_dataSource.Object);
+
+			_logSource.AddEntry("", LevelFlags.Error);
+			_logSource.AddEntry("", LevelFlags.Error);
+
+			var bookmark = collection.TryAddBookmark(_dataSource.Object, 1);
+			bookmarks.All.Should().HaveCount(1);
+
+			collection.RemoveBookmark(bookmark);
+			bookmarks.All.Should().BeEmpty("because the removed bookmark must no longer be part of the settings");
+
+			bookmarks.Save().Should().BeTrue();
+
+			var restored = new Tailviewer.Settings.Bookmarks.Bookmarks(fileName);
+			restored.Restore();
+			restored.All.Should().BeEmpty("because a removed bookmark must not reappear after a restart");
+		}
+
+		[Test]
+		[Description("Verifies that cleared bookmarks don't reappear after a restart")]
+		public void TestClearBookmarksFromSettings()
+		{
+			var fileName = PathEx.GetTempFileName();
+			var bookmarks = new Tailviewer.Settings.Bookmarks.Bookmarks(fileName);
+			var collection = new BookmarkCollection(bookmarks, TimeSpan.Zero);
+			collection.AddDataSource(_dataSource.Object);
+
+			_logSource.AddEntry("", LevelFlags.Error);
+			_logSource.AddEntry("", LevelFlags.Error);
+
+			collection.TryAddBookmark(_dataSource.Object, 0);
+			collection.TryAddBookmark(_dataSource.Object, 1);
+			bookmarks.All.Should().HaveCount(2);
+
+			collection.Clear();
+			collection.Bookmarks.Should().BeEmpty();
+			bookmarks.All.Should().BeEmpty("because the cleared bookmarks must no longer be part of the settings");
 		}
 
 		[Test]

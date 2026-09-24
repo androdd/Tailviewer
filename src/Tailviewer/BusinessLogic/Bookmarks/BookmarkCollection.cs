@@ -150,8 +150,13 @@ namespace Tailviewer.BusinessLogic.Bookmarks
 
 			lock (_syncRoot)
 			{
-				if (!_bookmarks.Remove(bookmark))
+				if (!_bookmarks.TryGetValue(bookmark, out var settings))
 					return;
+
+				_bookmarks.Remove(bookmark);
+				// The bookmark must also be removed from the settings or it will
+				// be saved to disk regardless and simply reappear after a restart.
+				_settings.Remove(new[] {settings});
 
 				Update();
 				_settings.SaveAsync();
@@ -192,6 +197,9 @@ namespace Tailviewer.BusinessLogic.Bookmarks
 		{
 			lock (_syncRoot)
 			{
+				// The bookmarks must also be removed from the settings or they will
+				// be saved to disk regardless and simply reappear after a restart.
+				_settings.Remove(_bookmarks.Values.ToList());
 				_bookmarks.Clear();
 
 				Update();
