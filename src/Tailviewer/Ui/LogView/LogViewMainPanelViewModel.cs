@@ -47,6 +47,7 @@ namespace Tailviewer.Ui.LogView
 
 		private readonly DataSourcesViewModel _dataSources;
 		private readonly QuickFiltersSidePanelViewModel _quickFilters;
+		private readonly IHighlighters _highlighterCollection;
 		private HighlightersSidePanelViewModel _highlighters;
 
 		private readonly IActionCenter _actionCenter;
@@ -75,7 +76,8 @@ namespace Tailviewer.Ui.LogView
 			_quickFilters = new QuickFiltersSidePanelViewModel(applicationSettings, quickFilters);
 			_quickFilters.OnFiltersChanged += OnFiltersChanged;
 
-			_highlighters = new HighlightersSidePanelViewModel(highlighters);
+			_highlighterCollection = highlighters;
+			_highlighters = new HighlightersSidePanelViewModel(applicationSettings, highlighters);
 
 			_goToLine = new GoToLineViewModel();
 			_goToLine.LineNumberChosen += GoToLineOnLineNumberChosen;
@@ -91,7 +93,7 @@ namespace Tailviewer.Ui.LogView
 			_sidePanels = new ISidePanelViewModel[]
 			{
 				_quickFilters,
-				//_highlighters,
+				_highlighters,
 				_bookmarks,
 				_properties,
 				_outline,
@@ -418,6 +420,8 @@ namespace Tailviewer.Ui.LogView
 		}
 
 		public IEnumerable<ISidePanelViewModel> SidePanels => _sidePanels;
+
+		public IHighlighters Highlighters => _highlighterCollection;
 
 		public ISidePanelViewModel SelectedSidePanel
 		{

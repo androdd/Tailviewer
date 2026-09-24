@@ -123,6 +123,34 @@ namespace Tailviewer.Tests.Settings
 		}
 
 		[Test]
+		[Description("Verifies that highlighters are stored and restored")]
+		public void TestRestoreHighlighters()
+		{
+			string fname = PathEx.GetTempFileName();
+			var settings = new ApplicationSettings(fname);
+			settings.Highlighters.Add(new HighlighterSettings
+			{
+				Value = "Sync",
+				MatchType = FilterMatchType.RegexpFilter,
+				BackgroundColor = System.Windows.Media.Color.FromRgb(0xA5, 0xD6, 0xA7),
+				IsActive = false
+			});
+			var id = settings.Highlighters[0].Id;
+
+			settings.Save();
+			settings = new ApplicationSettings(fname);
+			settings.Restore();
+
+			settings.Highlighters.Count.Should().Be(1);
+			var highlighter = settings.Highlighters[0];
+			highlighter.Id.Should().Be(id);
+			highlighter.Value.Should().Be("Sync");
+			highlighter.MatchType.Should().Be(FilterMatchType.RegexpFilter);
+			highlighter.BackgroundColor.Should().Be(System.Windows.Media.Color.FromRgb(0xA5, 0xD6, 0xA7));
+			highlighter.IsActive.Should().BeFalse();
+		}
+
+		[Test]
 		[Description("Verifies that the visible log line and horizontal offset is restored")]
 		public void TestRestore4()
 		{

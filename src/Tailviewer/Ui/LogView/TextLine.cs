@@ -23,6 +23,9 @@ namespace Tailviewer.Ui.LogView
 		private readonly TextBrushes _textBrushes;
 		private readonly HashSet<LogLineIndex> _selectedIndices;
 		private ISearchResults _searchResults;
+		private IReadOnlyList<LineHighlighter> _highlighters;
+		private LineHighlighter _matchedHighlighter;
+		private bool _highlighterEvaluated;
 		private Brush _lastForegroundBrush;
 		private bool _colorByLevel;
 		private bool _isFocused;
@@ -91,6 +94,13 @@ namespace Tailviewer.Ui.LogView
 		{
 			get
 			{
+				if (!IsSelected)
+				{
+					var highlighter = MatchedHighlighter;
+					if (highlighter != null)
+						return highlighter.ForegroundBrush;
+				}
+
 				return _textBrushes.ForegroundBrush(IsSelected, IsFocused, ColorByLevel, _logEntry.LogLevel);
 			}
 		}
@@ -99,8 +109,56 @@ namespace Tailviewer.Ui.LogView
 		{
 			get
 			{
+				if (!IsSelected)
+				{
+					var highlighter = MatchedHighlighter;
+					if (highlighter != null)
+						return highlighter.BackgroundBrush;
+				}
+
 				return _textBrushes.BackgroundBrush(IsSelected, IsFocused, ColorByLevel, _logEntry.LogLevel, (int) _logEntry.LogEntryIndex);
 			}
+		}
+
+		public IReadOnlyList<LineHighlighter> Highlighters
+		{
+			set
+			{
+				_highlighters = value;
+				_matchedHighlighter = null;
+				_highlighterEvaluated = false;
+			}
+		}
+
+		private LineHighlighter MatchedHighlighter
+		{
+			get
+			{
+				if (!_highlighterEvaluated)
+				{
+					_matchedHighlighter = FindMatchingHighlighter();
+					_highlighterEvaluated = true;
+				}
+
+				return _matchedHighlighter;
+			}
+		}
+
+		private LineHighlighter FindMatchingHighlighter()
+		{
+			var highlighters = _highlighters;
+			if (highlighters == null)
+				return null;
+
+			// ReSharper disable once ForCanBeConvertedToForeach
+			for (int i = 0; i < highlighters.Count; ++i)
+			{
+				var highlighter = highlighters[i];
+				if (highlighter.Matches(_logEntry))
+					return highlighter;
+			}
+
+			return null;
 		}
 
 		public bool IsSelected => _selectedIndices.Contains(_logEntry.Index);

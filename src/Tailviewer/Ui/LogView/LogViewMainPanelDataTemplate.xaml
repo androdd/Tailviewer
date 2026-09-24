@@ -18,6 +18,7 @@
                 <logView:LogViewerControl
                     x:Name="PART_LogFileView"
                     Settings="{Binding Settings}"
+                    Highlighters="{Binding Highlighters}"
                     LogEntryCount="{Binding CurrentDataSourceLogView.LogEntryCount}"
                     TotalLogEntryCount="{Binding CurrentDataSourceLogView.TotalLogEntryCount}"
                     ErrorIcon="{Binding CurrentDataSourceLogView.NoEntriesIcon, FallbackValue={x:Static metrolib:Icons.File}}"

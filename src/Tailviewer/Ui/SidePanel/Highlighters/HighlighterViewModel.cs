@@ -1,7 +1,9 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.Windows.Media;
 using Metrolib;
 using Tailviewer.BusinessLogic.Highlighters;
 using Tailviewer.Core;
@@ -13,7 +15,6 @@ namespace Tailviewer.Ui.SidePanel.Highlighters
 	{
 		private readonly Highlighter _highlighter;
 		private readonly ICommand _removeCommand;
-		private bool _isActive;
 		private bool _isValid;
 		private bool _isEditing;
 
@@ -21,18 +22,21 @@ namespace Tailviewer.Ui.SidePanel.Highlighters
 		{
 			_highlighter = highlighter;
 			_removeCommand = new DelegateCommand2(() => onRemove(this));
-			_isValid = true;
+
+			UpdateValidity();
 		}
+
+		public Highlighter Highlighter => _highlighter;
 
 		public bool IsActive
 		{
-			get { return _isActive; }
+			get { return _highlighter.IsActive; }
 			set
 			{
-				if (value == _isActive)
+				if (value == _highlighter.IsActive)
 					return;
 
-				_isActive = value;
+				_highlighter.IsActive = value;
 				EmitPropertyChanged();
 			}
 		}
@@ -40,7 +44,7 @@ namespace Tailviewer.Ui.SidePanel.Highlighters
 		public bool IsValid
 		{
 			get { return _isValid; }
-			set
+			private set
 			{
 				if (value == _isValid)
 					return;
@@ -59,6 +63,7 @@ namespace Tailviewer.Ui.SidePanel.Highlighters
 					return;
 
 				_highlighter.Value = value;
+				UpdateValidity();
 				EmitPropertyChanged();
 			}
 		}
@@ -85,13 +90,42 @@ namespace Tailviewer.Ui.SidePanel.Highlighters
 					return;
 
 				_highlighter.MatchType = value;
+				UpdateValidity();
 				EmitPropertyChanged();
 			}
 		}
 
+		public Color Color
+		{
+			get { return _highlighter.BackgroundColor; }
+			set
+			{
+				if (value == _highlighter.BackgroundColor)
+					return;
+
+				_highlighter.BackgroundColor = value;
+				EmitPropertyChanged();
+			}
+		}
+
+		public IReadOnlyList<Color> AvailableColors => HighlighterCollection.Palette;
+
 		public ICommand RemoveCommand => _removeCommand;
 
 		public event PropertyChangedEventHandler PropertyChanged;
+
+		private void UpdateValidity()
+		{
+			try
+			{
+				_highlighter.CreateFilter();
+				IsValid = true;
+			}
+			catch (ArgumentException)
+			{
+				IsValid = false;
+			}
+		}
 
 		private void EmitPropertyChanged([CallerMemberName] string propertyName = null)
 		{

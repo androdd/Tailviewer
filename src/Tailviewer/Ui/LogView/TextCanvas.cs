@@ -48,6 +48,7 @@ namespace Tailviewer.Ui.LogView
 		private double _xOffset;
 		private double _yOffset;
 		private bool _colorByLevel;
+		private IReadOnlyList<LineHighlighter> _highlighters;
 		private ILogSourceSearch _search;
 		private int _selectedSearchResultIndex;
 		private bool _requiresFurtherUpdate;
@@ -133,6 +134,16 @@ namespace Tailviewer.Ui.LogView
 		}
 
 		public List<TextLine> VisibleTextLines => _visibleTextLines;
+
+		public IReadOnlyList<LineHighlighter> Highlighters
+		{
+			get { return _highlighters; }
+			set
+			{
+				_highlighters = value;
+				UpdateVisibleLines();
+			}
+		}
 
 		public IEnumerable<LogLineIndex> SelectedIndices
 		{
@@ -361,7 +372,8 @@ namespace Tailviewer.Ui.LogView
 						                        _colorByLevel, _textSettings, _textBrushes)
 						{
 							IsFocused = IsFocused,
-							SearchResults = _searchResults
+							SearchResults = _searchResults,
+							Highlighters = _highlighters
 						};
 						_visibleTextLines.Add(line);
 					}

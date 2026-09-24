@@ -162,6 +162,8 @@
     <Compile Include="Settings\CustomFormats\CustomFormatSettings.cs" />
     <Compile Include="Settings\CustomFormats\CustomLogFileFormat.cs" />
     <Compile Include="Settings\Desktop.cs" />
+    <Compile Include="Settings\HighlighterSettings.cs" />
+    <Compile Include="Settings\HighlightersSettings.cs" />
     <Compile Include="Settings\ICustomFormatsSettings.cs" />
     <Compile Include="Settings\ILogViewerSettings.cs" />
     <Compile Include="Settings\LogFileSettings.cs" />
@@ -366,7 +368,9 @@
     <Compile Include="Ui\LogView\SelectMode.cs" />
     <Compile Include="Ui\LogView\TextCanvas.cs" />
     <Compile Include="Ui\LogView\TextSegment.cs" />
+    <Compile Include="Ui\ColorToBrushConverter.cs" />
     <Compile Include="Ui\QuickFilterMatchTypeToggleButton.cs" />
+    <Compile Include="Ui\LogView\LineHighlighter.cs" />
     <Compile Include="Ui\LogView\TextLine.cs" />
     <Compile Include="Ui\LogView\LogEntryListView.cs" />
     <Compile Include="Ui\Settings\SettingsControl.xaml.cs">

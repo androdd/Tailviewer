@@ -14,6 +14,7 @@ using log4net;
 using Metrolib.Controls;
 using Tailviewer.Api;
 using Tailviewer.BusinessLogic.DataSources;
+using Tailviewer.BusinessLogic.Highlighters;
 using Tailviewer.BusinessLogic.Searches;
 using Tailviewer.Core;
 using Tailviewer.Settings;
@@ -46,6 +47,10 @@ namespace Tailviewer.Ui.LogView
 		public static readonly DependencyProperty SearchProperty =
 			DependencyProperty.Register("Search", typeof(ILogSourceSearch), typeof(LogEntryListView),
 				new PropertyMetadata(defaultValue: null, propertyChangedCallback: OnSearchChanged));
+
+		public static readonly DependencyProperty HighlightersProperty =
+			DependencyProperty.Register("Highlighters", typeof(IHighlighters), typeof(LogEntryListView),
+				new PropertyMetadata(defaultValue: null, propertyChangedCallback: OnHighlightersChanged));
 
 		public static readonly DependencyProperty FollowTailProperty =
 			DependencyProperty.Register("FollowTail", typeof(bool), typeof(LogEntryListView),
@@ -283,6 +288,12 @@ namespace Tailviewer.Ui.LogView
 			set { SetValue(SearchProperty, value); }
 		}
 
+		public IHighlighters Highlighters
+		{
+			get { return (IHighlighters) GetValue(HighlightersProperty); }
+			set { SetValue(HighlightersProperty, value); }
+		}
+
 		public List<TextLine> VisibleTextLines => PartTextCanvas.VisibleTextLines;
 
 		public IEnumerable<LogLineIndex> SelectedIndices
@@ -463,6 +474,27 @@ namespace Tailviewer.Ui.LogView
 		private void OnSearchChanged(ILogSourceSearch search)
 		{
 			PartTextCanvas.Search = search;
+		}
+
+		private static void OnHighlightersChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+		{
+			((LogEntryListView) dependencyObject).OnHighlightersChanged((IHighlighters) args.OldValue,
+			                                                            (IHighlighters) args.NewValue);
+		}
+
+		private void OnHighlightersChanged(IHighlighters oldHighlighters, IHighlighters newHighlighters)
+		{
+			if (oldHighlighters != null)
+				oldHighlighters.OnChanged -= UpdateHighlighters;
+			if (newHighlighters != null)
+				newHighlighters.OnChanged += UpdateHighlighters;
+
+			UpdateHighlighters();
+		}
+
+		private void UpdateHighlighters()
+		{
+			PartTextCanvas.Highlighters = LineHighlighter.CreateFrom(Highlighters);
 		}
 
 		private static void OnColorByLevelChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)

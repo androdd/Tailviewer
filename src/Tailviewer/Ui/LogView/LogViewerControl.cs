@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Tailviewer.Api;
+using Tailviewer.BusinessLogic.Highlighters;
 using Tailviewer.BusinessLogic.Searches;
 using Tailviewer.Settings;
 using Tailviewer.Ui.DataSourceTree;
@@ -26,6 +27,10 @@ namespace Tailviewer.Ui.LogView
 		public static readonly DependencyProperty SearchProperty =
 			DependencyProperty.Register("Search", typeof(ILogSourceSearch), typeof(LogViewerControl),
 				new PropertyMetadata(default(ILogSourceSearch)));
+
+		public static readonly DependencyProperty HighlightersProperty =
+			DependencyProperty.Register("Highlighters", typeof(IHighlighters), typeof(LogViewerControl),
+				new PropertyMetadata(default(IHighlighters)));
 
 		public static readonly DependencyProperty DataSourceProperty =
 			DependencyProperty.Register("DataSource", typeof(IDataSourceViewModel), typeof(LogViewerControl),
@@ -152,6 +157,12 @@ namespace Tailviewer.Ui.LogView
 		{
 			get { return (ILogSourceSearch) GetValue(SearchProperty); }
 			set { SetValue(SearchProperty, value); }
+		}
+
+		public IHighlighters Highlighters
+		{
+			get { return (IHighlighters) GetValue(HighlightersProperty); }
+			set { SetValue(HighlightersProperty, value); }
 		}
 
 		public Geometry ErrorIcon

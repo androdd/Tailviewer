@@ -96,6 +96,7 @@
     <Compile Include="BusinessLogic\DataSources\FolderDataSourceTest.cs" />
     <Compile Include="BusinessLogic\Export\LogFileToFileExporterTest.cs" />
     <Compile Include="BusinessLogic\Export\LogFileToStreamExporterTest.cs" />
+    <Compile Include="BusinessLogic\Highlighters\HighlighterCollectionTest.cs" />
     <Compile Include="BusinessLogic\Highlighters\HighlighterTest.cs" />
     <Compile Include="BusinessLogic\Settings\QuickFiltersTest.cs" />
     <Compile Include="BusinessLogic\Settings\QuickFilterTest.cs" />
@@ -132,6 +133,7 @@
     <Compile Include="Settings\ExportSettingsTest.cs" />
     <Compile Include="Settings\LogLevelSettingsTest.cs" />
     <Compile Include="Settings\LogViewerSettingsTest.cs" />
+    <Compile Include="Settings\HighlightersSettingsTest.cs" />
     <Compile Include="Settings\MainWindowSettingsTest.cs" />
     <Compile Include="Settings\QuickFiltersTest.cs" />
     <Compile Include="Settings\QuickFilterTest.cs" />

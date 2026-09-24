@@ -217,7 +217,7 @@ namespace Tailviewer
 						}
 
 						var quickFilters = new QuickFilters(settings.QuickFilters);
-						var highlighters = new HighlighterCollection();
+						var highlighters = new HighlighterCollection(settings.Highlighters);
 						services.RegisterInstance<IHighlighters>(highlighters);
 
 						actionCenter.Add(Build.Current);

@@ -10,6 +10,7 @@
     </ResourceDictionary.MergedDictionaries>
 
     <converters:BoolFalseToCollapsedConverter x:Key="BoolFalseToCollapsedConverter" />
+    <ui:ColorToBrushConverter x:Key="ColorToBrushConverter" />
 
     <DataTemplate DataType="{x:Type local:HighlighterViewModel}">
         <Grid Margin="8,4,0,4">
@@ -23,6 +24,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="10" />
@@ -43,16 +45,28 @@
                     IsValid="{Binding IsValid, Mode=OneWay}"
                     Watermark="Enter highlighted term" />
 
+                <Rectangle
+                    x:Name="PART_Color"
+                    Grid.Column="2"
+                    Width="16"
+                    Height="16"
+                    Margin="4,0,4,0"
+                    VerticalAlignment="Center"
+                    Stroke="{StaticResource SeparatorBrush}"
+                    StrokeThickness="1"
+                    Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                    ToolTip="The color with which matching lines are painted" />
+
                 <controls:EditToggleButton
                     SnapsToDevicePixels="True"
                     x:Name="PART_EditToggleButton"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     VerticalAlignment="Stretch"
                     IsChecked="{Binding IsEditing, Mode=TwoWay}" />
 
                 <controls:CloseButton
                     x:Name="PART_RemoveButton"
-                    Grid.Column="3"
+                    Grid.Column="4"
                     VerticalAlignment="Stretch"
                     HorizontalAlignment="Right"
                     Command="{Binding RemoveCommand}" />
@@ -69,6 +83,29 @@
                 <ui:QuickFilterMatchTypeToggleButton
                     FilterMatchType="{Binding MatchType, Mode=TwoWay}"
                     Margin="0,8,0,8" />
+
+                <ListBox Grid.Row="1"
+                         Margin="0,0,0,8"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         ItemsSource="{Binding AvailableColors}"
+                         SelectedItem="{Binding Color, Mode=TwoWay}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Rectangle Width="16"
+                                       Height="16"
+                                       Stroke="{StaticResource SeparatorBrush}"
+                                       StrokeThickness="1"
+                                       Fill="{Binding Converter={StaticResource ColorToBrushConverter}}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
                 <Rectangle Fill="{StaticResource SeparatorBrush}" Grid.Row="2" />
             </Grid>

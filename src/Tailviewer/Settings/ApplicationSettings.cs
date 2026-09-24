@@ -24,6 +24,7 @@ namespace Tailviewer.Settings
 		private readonly string _fileName;
 		private readonly MainWindowSettings _mainWindow;
 		private readonly QuickFiltersSettings _quickFilters;
+		private readonly HighlightersSettings _highlighters;
 		private readonly ExportSettings _export;
 		private readonly LogViewerSettings _logViewer;
 		private readonly LogFileSettings _logFile;
@@ -59,6 +60,7 @@ namespace Tailviewer.Settings
 			_mainWindow = other._mainWindow.Clone();
 			_dataSources = other._dataSources.Clone();
 			_quickFilters = other._quickFilters.Clone();
+			_highlighters = other._highlighters.Clone();
 			_export = other._export.Clone();
 			_logViewer = other._logViewer.Clone();
 			_logFile = other._logFile.Clone();
@@ -75,6 +77,7 @@ namespace Tailviewer.Settings
 			_mainWindow = new MainWindowSettings();
 			_dataSources = new DataSourceSettings();
 			_quickFilters = new QuickFiltersSettings();
+			_highlighters = new HighlightersSettings();
 			_logViewer = new LogViewerSettings();
 			_logFile = new LogFileSettings();
 			_export = new ExportSettings();
@@ -93,6 +96,8 @@ namespace Tailviewer.Settings
 		public ILogFileSettings LogFile => _logFile;
 
 		public QuickFiltersSettings QuickFilters => _quickFilters;
+
+		public HighlightersSettings Highlighters => _highlighters;
 
 		public IExportSettings Export => _export;
 
@@ -145,6 +150,10 @@ namespace Tailviewer.Settings
 
 						writer.WriteStartElement("quickfilters");
 						_quickFilters.Save(writer);
+						writer.WriteEndElement();
+
+						writer.WriteStartElement("highlighters");
+						_highlighters.Save(writer);
 						writer.WriteEndElement();
 
 						writer.WriteStartElement("autoupdate");
@@ -226,6 +235,10 @@ namespace Tailviewer.Settings
 
 							case "quickfilters":
 								_quickFilters.Restore(reader);
+								break;
+
+							case "highlighters":
+								_highlighters.Restore(reader);
 								break;
 
 							case "autoupdate":
